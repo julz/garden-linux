@@ -41,17 +41,15 @@ func TestMeasurements(t *testing.T) {
 		runner, err = Runner.New(wardenPath, binPath, rootFSPath, "unix", filepath.Join(tmpdir, "warden.sock"))
 		Ω(err).ShouldNot(HaveOccurred())
 
-		err = runner.Start()
-		Ω(err).ShouldNot(HaveOccurred())
+		runner.Start()
 
 		client = runner.NewClient()
 	})
 
 	AfterSuite(func() {
-		err := runner.TearDown()
-		Ω(err).ShouldNot(HaveOccurred())
+		runner.KillWithFire()
 
-		err = os.RemoveAll(tmpdir)
+		err := os.RemoveAll(tmpdir)
 		Ω(err).ShouldNot(HaveOccurred())
 	})
 

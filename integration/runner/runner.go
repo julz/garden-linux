@@ -69,7 +69,7 @@ func (r *Runner) Prepare() error {
 	return nil
 }
 
-func (r *Runner) Start(argv ...string) error {
+func (r *Runner) Start(argv ...string) {
 	wardenArgs := argv
 	wardenArgs = append(
 		wardenArgs,
@@ -90,13 +90,12 @@ func (r *Runner) Start(argv ...string) error {
 	warden.Stderr = os.Stderr
 
 	session, err := gexec.Start(warden, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
-	if err != nil {
-		return err
-	}
+	Expect(err).ToNot(HaveOccurred())
 
 	r.wardenSession = session
 
-	return r.WaitForStart()
+	err = r.WaitForStart()
+	Expect(err).ToNot(HaveOccurred())
 }
 
 func (r *Runner) Stop() {
@@ -116,8 +115,8 @@ func (r *Runner) KillWithFire() {
 	}
 
 	r.wardenSession.Command.Process.Kill()
+	defer os.RemoveAll(r.tmpdir)
 	Eventually(r.wardenSession.ExitCode, 10).ShouldNot(Equal(-1))
-
 	r.wardenSession = nil
 }
 
@@ -141,20 +140,6 @@ func (r *Runner) DestroyContainers() error {
 	}
 
 	return nil
-}
-
-func (r *Runner) TearDown() error {
-	err := r.DestroyContainers()
-	if err != nil {
-		return err
-	}
-
-	err = r.Stop()
-	if err != nil {
-		return err
-	}
-
-	return os.RemoveAll(r.tmpdir)
 }
 
 func (r *Runner) NewClient() warden.Client {

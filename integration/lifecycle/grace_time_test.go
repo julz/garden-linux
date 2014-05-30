@@ -12,22 +12,14 @@ var _ = Describe("A container with a grace time", func() {
 	var container warden.Container
 
 	BeforeEach(func() {
-		err := runner.Stop()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = runner.Start("--containerGraceTime", "5s")
-		Expect(err).ToNot(HaveOccurred())
-
+		var err error
+		runner.Start("--containerGraceTime", "5s")
 		container, err = client.Create(warden.ContainerSpec{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		err := runner.Stop()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = runner.Start()
-		Expect(err).ToNot(HaveOccurred())
+		runner.Stop()
 	})
 
 	Context("when a request takes longer than the grace time", func() {

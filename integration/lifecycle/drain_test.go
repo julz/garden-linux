@@ -45,11 +45,8 @@ var _ = Describe("Through a restart", func() {
 	})
 
 	restartServer := func() {
-		err := runner.Stop()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = runner.Start()
-		Expect(err).ToNot(HaveOccurred())
+		runner.Stop()
+		runner.Start()
 	}
 
 	AfterEach(func() {
@@ -324,11 +321,8 @@ var _ = Describe("Through a restart", func() {
 
 	Describe("a container's grace time", func() {
 		BeforeEach(func() {
-			err := runner.Stop()
-			Expect(err).ToNot(HaveOccurred())
-
-			err = runner.Start("--containerGraceTime", "5s")
-			Expect(err).ToNot(HaveOccurred())
+			runner.Stop()
+			runner.Start("--containerGraceTime", "5s")
 		})
 
 		It("is still enforced", func() {
