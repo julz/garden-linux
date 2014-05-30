@@ -99,21 +99,26 @@ func (r *Runner) Start(argv ...string) error {
 	return r.WaitForStart()
 }
 
-func (r *Runner) Stop() error {
+func (r *Runner) Stop() {
 	if r.wardenSession == nil {
-		return nil
+		return
 	}
 
-	err := r.wardenSession.Command.Process.Signal(os.Interrupt)
-	if err != nil {
-		return err
-	}
-
+	r.wardenSession.Command.Process.Signal(os.Interrupt)
 	Eventually(r.wardenSession.ExitCode, 10).ShouldNot(Equal(-1))
 
 	r.wardenSession = nil
+}
 
-	return nil
+func (r *Runner) KillWithFire() {
+	if r.wardenSession == nil {
+		return
+	}
+
+	r.wardenSession.Command.Process.Kill()
+	Eventually(r.wardenSession.ExitCode, 10).ShouldNot(Equal(-1))
+
+	r.wardenSession = nil
 }
 
 func (r *Runner) DestroyContainers() error {
