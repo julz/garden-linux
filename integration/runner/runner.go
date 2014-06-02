@@ -70,6 +70,10 @@ func (r *Runner) Prepare() error {
 }
 
 func (r *Runner) Start(argv ...string) {
+	if r.wardenSession != nil {
+		panic("starting more than one warden runner!!!")
+	}
+
 	wardenArgs := argv
 	wardenArgs = append(
 		wardenArgs,
