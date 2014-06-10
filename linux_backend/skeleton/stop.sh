@@ -47,7 +47,7 @@ ms_start=$(ms)
 ms_end=$(($ms_start + ($WAIT * 1000)))
 
 pid=$(cat ./run/wshd.pid)
-path=/tmp/warden/cgroup/cpu/instance-$id
+path=/tmp/warden${UNIQUENESS_TAG}/cgroup/cpu/instance-$id
 tasks=$path/tasks
 
 while true

@@ -8,11 +8,12 @@ shopt -s nullglob
 cd $(dirname $0)
 
 # Defaults for debugging the setup script
+iface_name="${UNIQUENESS_TAG}$(echo ${id} | cut -b $(expr ${#UNIQUENESS_TAG} + 1)-)"
 id=${id:-test}
 network_host_ip=${network_host_ip:-10.0.0.1}
-network_host_iface="w-${id}-0"
+network_host_iface="w-${iface_name}-0"
 network_container_ip=${network_container_ip:-10.0.0.2}
-network_container_iface="w-${id}-1"
+network_container_iface="w-${iface_name}-1"
 user_uid=${user_uid:-10000}
 rootfs_path=$(readlink -f $rootfs_path)
 

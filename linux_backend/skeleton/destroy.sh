@@ -11,10 +11,12 @@ source ./etc/config
 
 ./net.sh teardown
 
+cgroup_path=/tmp/warden${UNIQUENESS_TAG}
+
 if [ -f ./run/wshd.pid ]
 then
   pid=$(cat ./run/wshd.pid)
-  path=/tmp/warden/cgroup/cpu/instance-$id
+  path=${cgroup_path}/cgroup/cpu/instance-$id
   tasks=$path/tasks
 
   if [ -d $path ]
@@ -31,7 +33,7 @@ then
   rm -f ./run/wshd.pid
 
   # Remove cgroups
-  for system_path in /tmp/warden/cgroup/*
+  for system_path in ${cgroup_path}/*
   do
     path=$system_path/instance-$id
 

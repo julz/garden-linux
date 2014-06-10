@@ -5,12 +5,12 @@ set -o nounset
 set -o errexit
 shopt -s nullglob
 
-filter_forward_chain="warden-forward"
-filter_default_chain="warden-default"
-filter_instance_prefix="warden-instance-"
-nat_prerouting_chain="warden-prerouting"
-nat_postrouting_chain="warden-postrouting"
-nat_instance_prefix="warden-instance-"
+filter_forward_chain="${UNIQUENESS_TAG}warden-forward"
+filter_default_chain="${UNIQUENESS_TAG}warden-default"
+filter_instance_prefix="${UNIQUENESS_TAG}warden-instance-"
+nat_prerouting_chain="${UNIQUENESS_TAG}warden-prerouting"
+nat_postrouting_chain="${UNIQUENESS_TAG}warden-postrouting"
+nat_instance_prefix="${UNIQUENESS_TAG}warden-instance-"
 
 # Default ALLOW_NETWORKS/DENY_NETWORKS to empty
 ALLOW_NETWORKS=${ALLOW_NETWORKS:-}
@@ -104,7 +104,7 @@ function setup_filter() {
   done
 
   # Forward outbound traffic via ${filter_forward_chain}
-  iptables -w -A FORWARD -i w-+ --jump ${filter_forward_chain}
+  iptables -w -A FORWARD -i w-${UNIQUENESS_TAG}+ --jump ${filter_forward_chain}
 
   # Forward inbound traffic immediately
   default_interface=$(ip route show | grep default | cut -d' ' -f5 | head -1)

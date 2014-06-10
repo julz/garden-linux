@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -26,8 +27,44 @@ import (
 	"github.com/cloudfoundry-incubator/warden-linux/linux_backend/quota_manager"
 	"github.com/cloudfoundry-incubator/warden-linux/linux_backend/uid_pool"
 	"github.com/cloudfoundry-incubator/warden-linux/system_info"
+	"github.com/cloudfoundry/gunk/command_runner"
 	"github.com/cloudfoundry/gunk/command_runner/linux_command_runner"
 )
+
+type potato struct {
+	tag string
+	command_runner.CommandRunner
+}
+
+func (p *potato) Run(cmd *exec.Cmd) error {
+	if len(cmd.Env) == 0 {
+		cmd.Env = append(os.Environ(), "UNIQUENESS_TAG="+p.tag)
+	} else {
+		cmd.Env = append(cmd.Env, "UNIQUENESS_TAG="+p.tag)
+	}
+
+	return p.CommandRunner.Run(cmd)
+}
+
+func (p *potato) Start(cmd *exec.Cmd) error {
+	if len(cmd.Env) == 0 {
+		cmd.Env = append(os.Environ(), "UNIQUENESS_TAG="+p.tag)
+	} else {
+		cmd.Env = append(cmd.Env, "UNIQUENESS_TAG="+p.tag)
+	}
+
+	return p.CommandRunner.Start(cmd)
+}
+
+func (p *potato) Background(cmd *exec.Cmd) error {
+	if len(cmd.Env) == 0 {
+		cmd.Env = append(os.Environ(), "UNIQUENESS_TAG="+p.tag)
+	} else {
+		cmd.Env = append(cmd.Env, "UNIQUENESS_TAG="+p.tag)
+	}
+
+	return p.CommandRunner.Background(cmd)
+}
 
 var listenNetwork = flag.String(
 	"listenNetwork",
@@ -143,6 +180,12 @@ var dockerRegistry = flag.String(
 	"docker registry API endpoint",
 )
 
+var uniquenessTag = flag.String(
+	"uniquenessTag",
+	"",
+	"server-wide identifier used for 'global' configuration",
+)
+
 func main() {
 	flag.Parse()
 
@@ -167,6 +210,8 @@ func main() {
 		log.Fatalln("must specify -rootfs with linux backend")
 	}
 
+	os.Setenv("UNIQUENESS_TAG", *uniquenessTag)
+
 	uidPool := uid_pool.New(uint32(*uidPoolStart), uint32(*uidPoolSize))
 
 	_, ipNet, err := net.ParseCIDR(*networkPool)
@@ -179,7 +224,7 @@ func main() {
 	// TODO: use /proc/sys/net/ipv4/ip_local_port_range by default (end + 1)
 	portPool := port_pool.New(uint32(*portPoolStart), uint32(*portPoolSize))
 
-	runner := linux_command_runner.New(*debug)
+	runner := &potato{*uniquenessTag, linux_command_runner.New(*debug)}
 
 	quotaManager, err := quota_manager.New(*depotPath, *binPath, runner)
 	if err != nil {

@@ -164,7 +164,7 @@ func (p *LinuxContainerPool) Create(spec warden.ContainerSpec) (linux_backend.Co
 
 	containerPath := path.Join(p.depotPath, id)
 
-	cgroupsManager := cgroups_manager.New("/tmp/warden/cgroup", id)
+	cgroupsManager := cgroups_manager.New(fmt.Sprintf("/tmp/warden%s/cgroup", os.Getenv("UNIQUENESS_TAG")), id)
 
 	bandwidthManager := bandwidth_manager.New(containerPath, id, p.runner)
 
@@ -278,7 +278,7 @@ func (p *LinuxContainerPool) Restore(snapshot io.Reader) (linux_backend.Containe
 
 	containerPath := path.Join(p.depotPath, id)
 
-	cgroupsManager := cgroups_manager.New("/tmp/warden/cgroup", id)
+	cgroupsManager := cgroups_manager.New(fmt.Sprintf("/tmp/warden%s/cgroup", os.Getenv("UNIQUENESS_TAG")), id)
 
 	bandwidthManager := bandwidth_manager.New(containerPath, id, p.runner)
 
