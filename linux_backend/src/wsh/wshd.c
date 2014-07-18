@@ -682,6 +682,8 @@ int child_run(void *data) {
   int rv;
   char pivoted_lib_path[PATH_MAX];
   size_t pivoted_lib_path_len;
+  char pivot_old_path[PATH_MAX];
+  char pivot_new_path[PATH_MAX];
 
   /* Wait for parent */
   rv = barrier_wait(&w->barrier_parent);
@@ -695,15 +697,36 @@ int child_run(void *data) {
   pivoted_lib_path_len = strlen(pivoted_lib_path);
   realpath(w->lib_path, pivoted_lib_path + pivoted_lib_path_len);
 
-  rv = chdir(w->root_path);
-  if (rv == -1) {
-    perror("chdir");
+  snprintf(pivot_old_path, PATH_MAX, "%s/tmp/warden-host", w->root_path);
+  snprintf(pivot_new_path, PATH_MAX, "%s/tmp/warden-host/new", w->root_path);
+
+  rv = mkdir(pivot_old_path, 0700);
+  if (rv == -1 && errno != EEXIST) {
+    perror("mkdir");
     abort();
   }
 
-  rv = mkdir("tmp/warden-host", 0700);
+  rv = mount("tmprootfs", pivot_old_path, "tmpfs", 0, NULL);
+  if (rv == -1) {
+    perror("mount");
+    abort();
+  }
+
+  rv = mkdir(pivot_new_path, 0700);
   if (rv == -1 && errno != EEXIST) {
     perror("mkdir");
+    abort();
+  }
+
+  rv = mount(w->root_path, pivot_new_path, NULL, MS_BIND|MS_REC, NULL);
+  if (rv == -1) {
+    perror("mount");
+    abort();
+  }
+
+  rv = chdir(pivot_new_path);
+  if (rv == -1) {
+    perror("chdir");
     abort();
   }
 
