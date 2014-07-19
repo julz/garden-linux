@@ -9,15 +9,11 @@ cd $(dirname $0)/../
 
 source etc/config
 
-mkdir -p /dev/pts
-mount -t devpts -o newinstance,ptmxmode=0666 devpts /dev/pts
-ln -sf pts/ptmx /dev/ptmx
+mount -n -t devpts -o newinstance,ptmxmode=0666 devpts /dev/pts
 
-mkdir -p /proc
-mount -t proc none /proc
+mount -n -t proc none /proc
 
-mkdir -p /dev/shm
-mount -t tmpfs -o size=64k tmpfs /dev/shm
+mount -n -t tmpfs -o size=64k tmpfs /dev/shm
 
 hostname $id
 

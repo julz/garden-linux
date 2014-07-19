@@ -10,4 +10,5 @@ cd $(dirname $0)/../
 source ./etc/config
 
 cp bin/wshd $rootfs_path/sbin/wshd
+chown $user_uid:$user_uid $rootfs_path/sbin/wshd
 chmod 700 $rootfs_path/sbin/wshd

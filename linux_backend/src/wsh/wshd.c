@@ -742,6 +742,52 @@ int child_run(void *data) {
     abort();
   }
 
+  rv = mkdir("/dev/pts", 0700);
+  if (rv == -1 && errno != EEXIST) {
+    perror("mkdir");
+    abort();
+  }
+
+  rv = symlink("/dev/pts/ptmx", "/dev/ptmx");
+  if (rv == -1 || errno == EEXIST) {
+    rv = unlink("/dev/ptmx");
+    if (rv == -1) {
+      perror("unlink");
+      abort();
+    }
+
+    rv = symlink("/dev/pts/ptmx", "/dev/ptmx");
+  }
+
+  if (rv == -1) {
+    perror("symlink");
+    abort();
+  }
+
+  rv = mkdir("/proc", 0700);
+  if (rv == -1 && errno != EEXIST) {
+    perror("mkdir");
+    abort();
+  }
+
+  rv = mkdir("/dev/shm", 0700);
+  if (rv == -1 && errno != EEXIST) {
+    perror("mkdir");
+    abort();
+  }
+
+  rv = setuid(0);
+  if (rv == -1) {
+    perror("setuid");
+    abort();
+  }
+
+  rv = setgid(0);
+  if (rv == -1) {
+    perror("setgid");
+    abort();
+  }
+
   rv = run(pivoted_lib_path, "hook-child-after-pivot.sh");
   assert(rv == 0);
 

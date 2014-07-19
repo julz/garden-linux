@@ -98,6 +98,51 @@ var _ = Describe("Creating a container", func() {
 			Ω(process.Wait()).Should(Equal(42))
 		})
 
+		It("executes as an unprivileged root user", func() {
+			stdout := gbytes.NewBuffer()
+
+			process, err := container.Run(warden.ProcessSpec{
+				Path: "whoami",
+			}, warden.ProcessIO{
+				Stdout: stdout,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Eventually(stdout).Should(gbytes.Say("root\n"))
+
+			Ω(process.Wait()).Should(Equal(0))
+
+			process, err = container.Run(warden.ProcessSpec{
+				Path: "bash",
+				Args: []string{"-c", "echo h > /proc/sysrq-trigger"},
+			}, warden.ProcessIO{})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(process.Wait()).ShouldNot(Equal(0))
+		})
+
+		It("can escalate with setuid, but only to an unprivileged root user", func() {
+			stdout := gbytes.NewBuffer()
+
+			process, err := container.Run(warden.ProcessSpec{
+				Path: "/opt/setuid",
+				Args: []string{"/usr/bin/whoami"},
+			}, warden.ProcessIO{
+				Stdout: stdout,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Eventually(stdout).Should(gbytes.Say("root\n"))
+
+			process, err = container.Run(warden.ProcessSpec{
+				Path: "/opt/setuid",
+				Args: []string{"/bin/bash", "-c", "echo h > /proc/sysrq-trigger"},
+			}, warden.ProcessIO{})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(process.Wait()).ShouldNot(Equal(0))
+		})
+
 		It("streams input to the process's stdin", func() {
 			stdout := gbytes.NewBuffer()
 

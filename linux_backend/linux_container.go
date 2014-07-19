@@ -404,7 +404,6 @@ func (c *LinuxContainer) StreamIn(dstPath string, tarStream io.Reader) error {
 		Path: wshPath,
 		Args: []string{
 			"--socket", sockPath,
-			"--user", "vcap",
 			"bash", "-c",
 			fmt.Sprintf("mkdir -p %s && tar xf - -C %s", dstPath, dstPath),
 		},
@@ -433,7 +432,6 @@ func (c *LinuxContainer) StreamOut(srcPath string) (io.ReadCloser, error) {
 		Path: wshPath,
 		Args: []string{
 			"--socket", sockPath,
-			"--user", "vcap",
 			"tar", "cf", "-", "-C", workingDir, compressArg,
 		},
 		Stdout: tarWrite,
@@ -589,12 +587,7 @@ func (c *LinuxContainer) Run(spec warden.ProcessSpec, processIO warden.ProcessIO
 	wshPath := path.Join(c.path, "bin", "wsh")
 	sockPath := path.Join(c.path, "run", "wshd.sock")
 
-	user := "vcap"
-	if spec.Privileged {
-		user = "root"
-	}
-
-	args := []string{"--socket", sockPath, "--user", user}
+	args := []string{"--socket", sockPath}
 	for _, envVar := range spec.Env {
 		args = append(args, "--env", envVar)
 	}

@@ -363,38 +363,6 @@ var _ = Describe("Through a restart", func() {
 		})
 	})
 
-	Describe("a container's user", func() {
-		It("does not get reused", func() {
-			idA := gbytes.NewBuffer()
-			idB := gbytes.NewBuffer()
-
-			processA, err := container.Run(warden.ProcessSpec{
-				Path: "id",
-				Args: []string{"-u"},
-			}, warden.ProcessIO{
-				Stdout: idA,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(processA.Wait()).Should(Equal(0))
-
-			restartWarden()
-
-			otherContainer, err := client.Create(warden.ContainerSpec{})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			processB, err := otherContainer.Run(warden.ProcessSpec{
-				Path: "id",
-				Args: []string{"-u"},
-			}, warden.ProcessIO{Stdout: idB})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(processB.Wait()).Should(Equal(0))
-
-			Ω(idA.Contents()).ShouldNot(Equal(idB.Contents()))
-		})
-	})
-
 	Describe("a container's grace time", func() {
 		BeforeEach(func() {
 			restartWarden("--containerGraceTime", "5s")

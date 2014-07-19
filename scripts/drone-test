@@ -5,6 +5,32 @@ set -e -x
 export WARDEN_TEST_ROOTFS=/opt/warden/rootfs
 export GODEPS_WORKSPACE=$PWD/Godeps/_workspace
 
+# TODO move this into the test image
+cat > /opt/warden/rootfs/opt/setuid.c <<EOF
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int main(int argc, char *argv[]) {
+	if (setuid(0) < 0) {
+		perror("setuid");
+		abort();
+	}
+
+	if (execv(argv[1], &argv[1]) < 0) {
+		perror("execl");
+		abort();
+	}
+
+	return 0;
+}
+EOF
+
+gcc -o /opt/warden/rootfs/opt/setuid /opt/warden/rootfs/opt/setuid.c
+chown root:root /opt/warden/rootfs/opt/setuid
+chmod 4755 /opt/warden/rootfs/opt/setuid
+
 export GOPATH=$GODEPS_WORKSPACE:$GOPATH
 export PATH=$GODEPS_WORKSPACE/bin:$PATH
 

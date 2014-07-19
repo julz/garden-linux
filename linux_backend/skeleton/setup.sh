@@ -89,10 +89,5 @@ else
   cp /etc/resolv.conf $rootfs_path/etc/
 fi
 
-# Add vcap user if not already present
-$(which chroot) $rootfs_path env -i /bin/bash -l <<-EOS
-if ! id vcap > /dev/null 2>&1
-then
-  useradd -mU -u $user_uid -s /bin/bash vcap
-fi
-EOS
+# Make /root owned by $user_uid, which will be root in this namespace
+chown -R $user_uid:$user_uid $rootfs_path/root

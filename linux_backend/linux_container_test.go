@@ -689,7 +689,6 @@ var _ = Describe("Linux containers", func() {
 					Path: "/depot/some-id/bin/wsh",
 					Args: []string{
 						"--socket", "/depot/some-id/run/wshd.sock",
-						"--user", "vcap",
 						"bash", "-c", `mkdir -p /some/directory/dst && tar xf - -C /some/directory/dst`,
 					},
 				},
@@ -741,7 +740,6 @@ var _ = Describe("Linux containers", func() {
 					Path: "/depot/some-id/bin/wsh",
 					Args: []string{
 						"--socket", "/depot/some-id/run/wshd.sock",
-						"--user", "vcap",
 						"tar", "cf", "-", "-C", "/some/directory", "dst",
 					},
 				},
@@ -769,7 +767,6 @@ var _ = Describe("Linux containers", func() {
 						Path: "/depot/some-id/bin/wsh",
 						Args: []string{
 							"--socket", "/depot/some-id/run/wshd.sock",
-							"--user", "vcap",
 							"tar", "cf", "-", "-C", "/some/directory/dst/", ".",
 						},
 					},
@@ -829,7 +826,6 @@ var _ = Describe("Linux containers", func() {
 
 			Ω(ranCmd.Args).Should(Equal([]string{
 				"--socket", "/depot/some-id/run/wshd.sock",
-				"--user", "vcap",
 				"/some/script",
 				"arg1",
 				"arg2",
@@ -865,7 +861,6 @@ var _ = Describe("Linux containers", func() {
 			ranCmd, _, _ := fakeProcessTracker.RunArgsForCall(0)
 			Ω(ranCmd.Args).Should(Equal([]string{
 				"--socket", "/depot/some-id/run/wshd.sock",
-				"--user", "vcap",
 				"--env", `ESCAPED=kurt "russell"`,
 				"--env", "UNESCAPED=isaac\nhayes",
 				"/some/script",
@@ -883,7 +878,6 @@ var _ = Describe("Linux containers", func() {
 			ranCmd, _, _ := fakeProcessTracker.RunArgsForCall(0)
 			Ω(ranCmd.Args).Should(Equal([]string{
 				"--socket", "/depot/some-id/run/wshd.sock",
-				"--user", "vcap",
 				"--dir", "/some/dir",
 				"/some/script",
 			}))
@@ -974,7 +968,6 @@ var _ = Describe("Linux containers", func() {
 
 			Ω(ranCmd.Args).Should(Equal([]string{
 				"--socket", "/depot/some-id/run/wshd.sock",
-				"--user", "vcap",
 				"/some/script",
 			}))
 
@@ -988,26 +981,6 @@ var _ = Describe("Linux containers", func() {
 				"RLIMIT_RTPRIO=13",
 				"RLIMIT_STACK=15",
 			}))
-		})
-
-		Context("with 'privileged' true", func() {
-			It("runs with --user root", func() {
-				_, err := container.Run(warden.ProcessSpec{
-					Path:       "/some/script",
-					Privileged: true,
-				}, warden.ProcessIO{})
-
-				Ω(err).ToNot(HaveOccurred())
-
-				ranCmd, _, _ := fakeProcessTracker.RunArgsForCall(0)
-				Ω(ranCmd.Path).Should(Equal("/depot/some-id/bin/wsh"))
-
-				Ω(ranCmd.Args).Should(Equal([]string{
-					"--socket", "/depot/some-id/run/wshd.sock",
-					"--user", "root",
-					"/some/script",
-				}))
-			})
 		})
 
 		Context("when spawning fails", func() {
