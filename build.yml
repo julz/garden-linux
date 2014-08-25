@@ -1,5 +1,5 @@
 ---
-image: docker:///cloudfoundry/warden-ci
+image: docker:///cloudfoundry/warden-ci#dev
 
 paths:
   warden-linux: gopath/src/github.com/cloudfoundry-incubator/warden-linux

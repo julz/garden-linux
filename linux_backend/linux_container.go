@@ -467,9 +467,11 @@ func (c *LinuxContainer) StreamIn(dstPath string, tarStream io.Reader) error {
 	}
 
 	tar := exec.Command(
+		"strace",
+		"-f",
 		nsTarPath,
 		strconv.Itoa(pid),
-		fmt.Sprintf("%d", c.resources.UID),
+		"vcap",
 		dstPath,
 	)
 
