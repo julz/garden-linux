@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"net"
 	"os"
@@ -195,6 +196,21 @@ func main() {
 		logger.Fatal("failed-to-create-graph-directory", err)
 	}
 
+	graphRootStat := syscall.Stat_t{}
+	if err := syscall.Stat(*graphRoot, &graphRootStat); err != nil {
+		logger.Fatal("failed-to-stat-graph-directory", err)
+	}
+
+	rootFSStat := syscall.Stat_t{}
+	if err := syscall.Stat(*rootFSPath, &rootFSStat); err != nil {
+		logger.Fatal("failed-to-stat-rootfs-directory", err)
+	}
+
+	if graphRootStat.Dev == rootFSStat.Dev {
+		logger.Fatal("graphfs-and-rootfs-device-conflict",
+			errors.New("-graph and -rootfs must be on different devices"))
+	}
+
 	graphDriver, err := graphdriver.New(*graphRoot, nil)
 	if err != nil {
 		logger.Fatal("failed-to-construct-graph-driver", err)
@@ -211,7 +227,6 @@ func main() {
 	}
 
 	repoFetcher := repository_fetcher.Retryable{repository_fetcher.New(reg, graph)}
-
 	rootFSProviders := map[string]rootfs_provider.RootFSProvider{
 		"":       rootfs_provider.NewOverlay(*binPath, *overlaysPath, *rootFSPath, runner),
 		"docker": rootfs_provider.NewDocker(repoFetcher, graphDriver),
