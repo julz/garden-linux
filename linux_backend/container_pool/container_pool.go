@@ -22,12 +22,14 @@ import (
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/bandwidth_manager"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/cgroups_manager"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/container_pool/rootfs_provider"
+	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/network"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/network_pool"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/process_tracker"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/quota_manager"
 	"github.com/cloudfoundry-incubator/garden-linux/linux_backend/uid_pool"
 	"github.com/cloudfoundry-incubator/garden-linux/logging"
 	"github.com/cloudfoundry-incubator/garden-linux/sysconfig"
+	"net"
 )
 
 var ErrUnknownRootFSProvider = errors.New("unknown rootfs provider")
@@ -56,8 +58,7 @@ type LinuxContainerPool struct {
 	containerIDs chan string
 }
 
-func New(
-	logger lager.Logger,
+func New(logger lager.Logger,
 	binPath, depotPath string,
 	sysconfig sysconfig.Config,
 	rootfsProviders map[string]rootfs_provider.RootFSProvider,
@@ -66,29 +67,20 @@ func New(
 	portPool linux_backend.PortPool,
 	denyNetworks, allowNetworks []string,
 	runner command_runner.CommandRunner,
-	quotaManager quota_manager.QuotaManager,
-) *LinuxContainerPool {
+	quotaManager quota_manager.QuotaManager,) *LinuxContainerPool {
 	pool := &LinuxContainerPool{
 		logger: logger.Session("pool"),
-
 		binPath:   binPath,
 		depotPath: depotPath,
-
 		sysconfig: sysconfig,
-
 		rootfsProviders: rootfsProviders,
-
 		allowNetworks: allowNetworks,
 		denyNetworks:  denyNetworks,
-
 		uidPool:     uidPool,
 		networkPool: networkPool,
 		portPool:    portPool,
-
 		runner: runner,
-
 		quotaManager: quotaManager,
-
 		containerIDs: make(chan string),
 	}
 
@@ -109,13 +101,13 @@ func (p *LinuxContainerPool) MaxContainers() int {
 func (p *LinuxContainerPool) Setup() error {
 	setup := exec.Command(path.Join(p.binPath, "setup.sh"))
 	setup.Env = []string{
-		"POOL_NETWORK=" + p.networkPool.Network().String(),
-		"DENY_NETWORKS=" + formatNetworks(p.denyNetworks),
-		"ALLOW_NETWORKS=" + formatNetworks(p.allowNetworks),
-		"CONTAINER_DEPOT_PATH=" + p.depotPath,
-		"CONTAINER_DEPOT_MOUNT_POINT_PATH=" + p.quotaManager.MountPoint(),
+			"POOL_NETWORK="+p.networkPool.Network().String(),
+			"DENY_NETWORKS="+formatNetworks(p.denyNetworks),
+			"ALLOW_NETWORKS="+formatNetworks(p.allowNetworks),
+			"CONTAINER_DEPOT_PATH="+p.depotPath,
+			"CONTAINER_DEPOT_MOUNT_POINT_PATH="+p.quotaManager.MountPoint(),
 		fmt.Sprintf("DISK_QUOTA_ENABLED=%v", p.quotaManager.IsEnabled()),
-		"PATH=" + os.Getenv("PATH"),
+			"PATH="+os.Getenv("PATH"),
 	}
 
 	err := p.runner.Run(setup)
@@ -174,10 +166,10 @@ func (p *LinuxContainerPool) Create(spec warden.ContainerSpec) (c linux_backend.
 		return nil, err
 	}
 	defer cleanup(&err, func() {
-		p.releasePoolResources(resources)
-	})
+			p.releasePoolResources(resources)
+		})
 
-	rootFSEnvVars, err := p.aquireSystemResources(id, containerPath, spec.RootFSPath, resources, spec.BindMounts, pLog)
+	rootFSEnvVars, err := p.acquireSystemResources(id, containerPath, spec.RootFSPath, resources, spec.BindMounts, pLog)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +302,7 @@ func (p *LinuxContainerPool) generateContainerIDs() string {
 		for i = 0; i < 11; i++ {
 			containerID = strconv.AppendInt(
 				containerID,
-				(containerNum>>(55-(i+1)*5))&31,
+					(containerNum>>(55-(i+1)*5))&31,
 				32,
 			)
 		}
@@ -319,10 +311,8 @@ func (p *LinuxContainerPool) generateContainerIDs() string {
 	}
 }
 
-func (p *LinuxContainerPool) writeBindMounts(
-	containerPath string,
-	bindMounts []warden.BindMount,
-) error {
+func (p *LinuxContainerPool) writeBindMounts(containerPath string,
+	bindMounts []warden.BindMount,) error {
 	hook := path.Join(containerPath, "lib", "hook-child-before-pivot.sh")
 
 	for _, bm := range bindMounts {
@@ -377,6 +367,7 @@ func (p *LinuxContainerPool) saveRootFSProvider(id string, provider string) erro
 	return ioutil.WriteFile(providerFile, []byte(provider), 0644)
 }
 
+
 func (p *LinuxContainerPool) acquirePoolResources(networkSpec string) (*linux_backend.Resources, error) {
 	var err error
 	resources := linux_backend.NewResources(0, nil, nil)
@@ -386,12 +377,39 @@ func (p *LinuxContainerPool) acquirePoolResources(networkSpec string) (*linux_ba
 		p.logger.Error("uid-acquire-failed", err)
 		return nil, err
 	}
+	defer cleanup(&err, func() {
+			p.uidPool.Release(resources.UID)
+		})
 
-	resources.Network, err = p.networkPool.Acquire()
-	if err != nil {
-		p.logger.Error("network-acquire-failed", err)
-		p.releasePoolResources(resources)
-		return nil, err
+	const cidrSuffix = "/" + strconv.Itoa(warden.ContainerNetworkCIDRPrefixSize)
+	if networkSpec != "" {
+		containerIP, ipNet, err := net.ParseCIDR(networkSpec + cidrSuffix)
+		if err != nil {
+			p.logger.Error("network-spec-invalid", err)
+			return nil, err
+		}
+
+		// Set the network, host IP, and container IP to be consecutive IP addresses.
+		resources.Network = network.New(ipNet)
+
+		if containerIP != resources.Network.ContainerIP() {
+			err := errors.New(fmt.Sprintf("Invalid container IP address", containerIP))
+			p.logger.Error("container-ip-format-error", err)
+			return nil, err
+		}
+
+		// Allocate the IP addresses from the pool.
+		err = p.networkPool.Remove(resources.Network)
+		if err != nil {
+			p.logger.Error("network-allocation-failed", err)
+			return nil, err
+		}
+	} else {
+		resources.Network, err = p.networkPool.Acquire()
+		if err != nil {
+			p.logger.Error("network-acquire-failed", err)
+			return nil, err
+		}
 	}
 
 	return resources, nil
@@ -411,7 +429,7 @@ func (p *LinuxContainerPool) releasePoolResources(resources *linux_backend.Resou
 	}
 }
 
-func (p *LinuxContainerPool) aquireSystemResources(id, containerPath, rootFSPath string, resources *linux_backend.Resources, bindMounts []warden.BindMount, pLog lager.Logger) ([]string, error) {
+func (p *LinuxContainerPool) acquireSystemResources(id, containerPath, rootFSPath string, resources *linux_backend.Resources, bindMounts []warden.BindMount, pLog lager.Logger) ([]string, error) {
 	rootfsURL, err := url.Parse(rootFSPath)
 	if err != nil {
 		pLog.Error("parse-rootfs-path-failed", err, lager.Data{
@@ -437,12 +455,12 @@ func (p *LinuxContainerPool) aquireSystemResources(id, containerPath, rootFSPath
 	createCmd := path.Join(p.binPath, "create.sh")
 	create := exec.Command(createCmd, containerPath)
 	create.Env = []string{
-		"id=" + id,
-		"rootfs_path=" + rootfsPath,
+			"id="+id,
+			"rootfs_path="+rootfsPath,
 		fmt.Sprintf("user_uid=%d", resources.UID),
 		fmt.Sprintf("network_host_ip=%s", resources.Network.HostIP()),
 		fmt.Sprintf("network_container_ip=%s", resources.Network.ContainerIP()),
-		"PATH=" + os.Getenv("PATH"),
+			"PATH="+os.Getenv("PATH"),
 	}
 
 	pRunner := logging.Runner{
@@ -452,8 +470,8 @@ func (p *LinuxContainerPool) aquireSystemResources(id, containerPath, rootFSPath
 
 	err = pRunner.Run(create)
 	defer cleanup(&err, func() {
-		p.tryReleaseSystemResources(p.logger, id)
-	})
+			p.tryReleaseSystemResources(p.logger, id)
+		})
 
 	if err != nil {
 		p.logger.Error("create-command-failed", err, lager.Data{
