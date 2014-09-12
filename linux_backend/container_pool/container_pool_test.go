@@ -573,6 +573,18 @@ var _ = Describe("Container pool", func() {
 			})
 		})
 
+		FContext("when an invalid network is specified", func() {
+				It("returns the error and releases the uid", func() {
+						_, err := pool.Create(warden.ContainerSpec{
+						Network: "x",
+					})
+						Ω(err).Should(MatchError("tbd"))
+
+						Ω(fakeUIDPool.Released).Should(ContainElement(uint32(10000)))
+				})
+		})
+
+
 		Context("when executing create.sh fails", func() {
 			var containerPath string
 			nastyError := errors.New("oh no!")

@@ -381,7 +381,7 @@ func (p *LinuxContainerPool) acquirePoolResources(networkSpec string) (*linux_ba
 			p.uidPool.Release(resources.UID)
 		})
 
-	const cidrSuffix = "/" + strconv.Itoa(warden.ContainerNetworkCIDRPrefixSize)
+	cidrSuffix := "/" + strconv.Itoa(warden.ContainerNetworkCIDRPrefixSize)
 	if networkSpec != "" {
 		containerIP, ipNet, err := net.ParseCIDR(networkSpec + cidrSuffix)
 		if err != nil {
@@ -392,7 +392,7 @@ func (p *LinuxContainerPool) acquirePoolResources(networkSpec string) (*linux_ba
 		// Set the network, host IP, and container IP to be consecutive IP addresses.
 		resources.Network = network.New(ipNet)
 
-		if containerIP != resources.Network.ContainerIP() {
+		if containerIP.Equal(resources.Network.ContainerIP()) {
 			err := errors.New(fmt.Sprintf("Invalid container IP address", containerIP))
 			p.logger.Error("container-ip-format-error", err)
 			return nil, err
