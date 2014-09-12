@@ -20,10 +20,20 @@ type ContainerSpec struct {
 	GraceTime  time.Duration
 	RootFSPath string
 	BindMounts []BindMount
+
+	// The container's IP address. This allocates a network with a corresponding /30 CIDR block.
+	// The remaining 2 bits denote:
+	// 00 network
+	// 01 host IP
+	// 10 container IP
+	// 11 subnet mask
 	Network    string
+
 	Properties Properties
 	Env        []string
 }
+
+const ContainerNetworkCIDRPrefixSize = 30
 
 type BindMount struct {
 	SrcPath string
