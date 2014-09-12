@@ -169,7 +169,7 @@ func (p *LinuxContainerPool) Create(spec warden.ContainerSpec) (c linux_backend.
 
 	pLog.Info("creating")
 
-	resources, err := p.aquirePoolResources(spec.Network)
+	resources, err := p.acquirePoolResources(spec.Network)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +377,7 @@ func (p *LinuxContainerPool) saveRootFSProvider(id string, provider string) erro
 	return ioutil.WriteFile(providerFile, []byte(provider), 0644)
 }
 
-func (p *LinuxContainerPool) aquirePoolResources(networkSpec string) (*linux_backend.Resources, error) {
+func (p *LinuxContainerPool) acquirePoolResources(networkSpec string) (*linux_backend.Resources, error) {
 	var err error
 	resources := linux_backend.NewResources(0, nil, nil)
 
