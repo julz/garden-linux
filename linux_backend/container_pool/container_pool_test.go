@@ -573,17 +573,60 @@ var _ = Describe("Container pool", func() {
 			})
 		})
 
-		FContext("when an invalid network is specified", func() {
-				It("returns the error and releases the uid", func() {
-						_, err := pool.Create(warden.ContainerSpec{
-						Network: "x",
-					})
-						Ω(err).Should(MatchError("tbd"))
+		Context("when a valid network is specified", func() {
 
-						Ω(fakeUIDPool.Released).Should(ContainElement(uint32(10000)))
+			It("allocates the correct IP address range and does not release the uid", func() {
+				_, err := pool.Create(warden.ContainerSpec{
+					Network: "1.2.0.2",
 				})
+
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(fakeNetworkPool.Removed).Should(ContainElement("1.2.0.0/30"))
+				Ω(fakeUIDPool.Released).ShouldNot(ContainElement(uint32(10000)))
+			})
 		})
 
+		Context("when a network with invalid format is specified", func() {
+
+			It("returns a parse error and releases the uid", func() {
+					_, err := pool.Create(warden.ContainerSpec{
+					Network: "x",
+				})
+				Ω(err).Should(BeAssignableToTypeOf(&net.ParseError{}))
+
+				Ω(fakeUIDPool.Released).Should(ContainElement(uint32(10000)))
+			})
+		})
+
+		Context("when a network is specified which is not a valid container IP", func() {
+
+			It("returns a parse error and releases the uid", func() {
+					_, err := pool.Create(warden.ContainerSpec{
+					Network: "1.2.0.0",
+				})
+				Ω(err).Should(HaveOccurred())
+				Ω(err.Error()).Should(ContainSubstring("Invalid container IP address in network parameter"))
+
+				Ω(fakeUIDPool.Released).Should(ContainElement(uint32(10000)))
+			})
+		})
+
+		Context("when allocating a configured network fails", func() {
+			nastyError := errors.New("oh no!")
+
+			JustBeforeEach(func() {
+				fakeNetworkPool.RemoveError = nastyError
+			})
+
+			It("returns the error and releases the uid", func() {
+				_, err := pool.Create(warden.ContainerSpec{
+				Network: "1.2.0.2",
+			})
+				Ω(err).Should(Equal(nastyError))
+
+				Ω(fakeUIDPool.Released).Should(ContainElement(uint32(10000)))
+			})
+		})
 
 		Context("when executing create.sh fails", func() {
 			var containerPath string
