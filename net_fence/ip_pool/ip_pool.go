@@ -38,7 +38,27 @@ type pool struct {
 }
 
 func NewFromIPNet(ip *net.IPNet) (IPPool, error) {
-	return nil, nil
+	return New(IPRangeFromSubnet(ip))
+}
+
+func IPRangeFromSubnet(ipn *net.IPNet) (net.IP, net.IP) {
+	mask := ipn.Mask
+	min := ipn.IP
+
+	if len(mask) != len(min) {
+		panic("length of mask is not compatible with length of network IP")
+	}
+
+	max := make([]byte, len(min))
+	for i, b := range mask {
+		max[i] = min[i] | ^b
+	}
+
+	// Do not include the network and broadcast addresses.
+	min[len(min)-1]++
+	max[len(max)-1]--
+
+	return min, max
 }
 
 // New creates a new IP pool containing all the IP addresses between the given minimum and maximum, inclusive.

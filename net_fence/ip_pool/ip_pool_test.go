@@ -18,6 +18,24 @@ var _ = Describe("IpPool", func() {
 		Ω(err).Should(Equal(ip_pool.ErrInvalidRange))
 	})
 
+	Describe("IPRangeFromSubnet", func() {
+		It("Returns the smallest valid IP in a subnet", func() {
+			_, network, err := net.ParseCIDR("25.26.27.0/24")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			min, _ := ip_pool.IPRangeFromSubnet(network)
+			Ω(min.String()).Should(Equal("25.26.27.1"))
+		})
+
+		It("Returns the largest valid IP contained in a subnet", func() {
+			_, network, err := net.ParseCIDR("1:1:1:1:1:1:1:1/64")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, max := ip_pool.IPRangeFromSubnet(network)
+			Ω(max.String()).Should(Equal("1:1:1:1:ffff:ffff:ffff:fffe"))
+		})
+	})
+
 	Describe(".Allocate", func() {
 		Context("when there is more than one IP address in the pool", func() {
 			var (
