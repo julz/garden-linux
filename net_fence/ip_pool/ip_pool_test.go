@@ -23,7 +23,7 @@ var _ = Describe("IpPool", func() {
 			_, network, err := net.ParseCIDR("25.26.27.0/24")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			min, _ := ip_pool.IPRangeFromSubnet(network)
+			min, _, _ := ip_pool.IPRangeFromSubnet(network)
 			Ω(min.String()).Should(Equal("25.26.27.1"))
 		})
 
@@ -31,8 +31,17 @@ var _ = Describe("IpPool", func() {
 			_, network, err := net.ParseCIDR("1:1:1:1:1:1:1:1/64")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, max := ip_pool.IPRangeFromSubnet(network)
+			_, max, _ := ip_pool.IPRangeFromSubnet(network)
 			Ω(max.String()).Should(Equal("1:1:1:1:ffff:ffff:ffff:fffe"))
+		})
+
+		It("Returns an error if called with a /32", func() {
+			_, network, err := net.ParseCIDR("1.2.3.0/32")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, _, err = ip_pool.IPRangeFromSubnet(network)
+			Ω(err).Should(HaveOccurred())
+			Ω(err).Should(Equal(ip_pool.ErrInvalidRange))
 		})
 	})
 
