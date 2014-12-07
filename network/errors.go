@@ -3,6 +3,8 @@ package network
 import (
 	"fmt"
 	"net"
+
+	"github.com/cloudfoundry-incubator/garden-linux/network/iptables"
 )
 
 // VethPairCreationError is returned if creating a virtual ethernet pair fails
@@ -102,6 +104,17 @@ type ConfigureDefaultGWError struct {
 
 func (err ConfigureDefaultGWError) Error() string {
 	return fmtErr("failed to set default gateway to IP %v via device %v", err.IP, err.Interface, err.Cause)
+}
+
+// IPTablesError is returned if an iptable command fails
+type IPTablesError struct {
+	Cause  error
+	Action string
+	Rule   iptables.Rule
+}
+
+func (err IPTablesError) Error() string {
+	return fmtErr("failed to %s iptable rule %v: %v", err.Action, err.Rule, err.Cause)
 }
 
 func fmtErr(msg string, args ...interface{}) string {

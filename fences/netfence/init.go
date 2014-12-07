@@ -5,8 +5,10 @@ import (
 	"net"
 
 	"github.com/cloudfoundry-incubator/garden-linux/fences"
+	"github.com/cloudfoundry-incubator/garden-linux/network"
 	"github.com/cloudfoundry-incubator/garden-linux/network/subnets"
 	"github.com/cloudfoundry/gunk/localip"
+	"github.com/pivotal-golang/lager"
 )
 
 const (
@@ -53,7 +55,8 @@ func (config *Config) Main(registry *fences.BuilderRegistry) error {
 		return err
 	}
 
-	fence := &f{subnets, uint32(config.Mtu), config.ExternalIP.IP}
+	log := lager.NewLogger("netfence")
+	fence := &f{subnets, network.NewConfigurer(log), uint32(config.Mtu), config.ExternalIP.IP}
 	registry.Register(fence)
 
 	return nil

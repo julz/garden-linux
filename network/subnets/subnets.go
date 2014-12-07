@@ -13,7 +13,9 @@ import (
 type Subnets interface {
 	// Allocates a subnet and container IP address. The subnet is selected by the given SubnetSelector.
 	// The IP address is selected by the given IPSelector. If either selector fails, an error is returned.
-	Allocate(SubnetSelector, IPSelector) (*net.IPNet, net.IP, error)
+	// Additionally, if the request results in the creation of a subnet (i.e. if there were no previous IPs
+	// reserved in that subnet), the 'first' return parameter is true.
+	Allocate(SubnetSelector, IPSelector) (reservedSubnet *net.IPNet, reservedIP net.IP, first bool, err error)
 
 	// Releases an allocated network and container IP.
 	// Return a boolean which is true if and only if the network is no longer in use by other containers.
@@ -56,21 +58,22 @@ func New(ipNet *net.IPNet) (Subnets, error) {
 
 // Allocate uses the given subnet and IP selectors to request a subnet, container IP address combination
 // from the pool.
-func (p *pool) Allocate(sn SubnetSelector, i IPSelector) (subnet *net.IPNet, ip net.IP, err error) {
+func (p *pool) Allocate(sn SubnetSelector, i IPSelector) (subnet *net.IPNet, ip net.IP, first bool, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if subnet, err = sn.SelectSubnet(p.dynamicRange, existingSubnets(p.allocated)); err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
 	existingIPs := append(p.allocated[subnet.String()], NetworkIP(subnet), GatewayIP(subnet), BroadcastIP(subnet))
 	if ip, err = i.SelectIP(subnet, existingIPs); err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
+	first = len(p.allocated[subnet.String()]) == 0
 	p.allocated[subnet.String()] = append(p.allocated[subnet.String()], ip)
-	return subnet, ip, nil
+	return subnet, ip, first, nil
 }
 
 // Recover re-allocates a given subnet and ip address combination in the pool. It returns

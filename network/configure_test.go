@@ -6,15 +6,99 @@ import (
 
 	"github.com/cloudfoundry-incubator/garden-linux/network"
 	"github.com/cloudfoundry-incubator/garden-linux/network/devices/fakedevices"
+	"github.com/cloudfoundry-incubator/garden-linux/network/iptables"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var testError = errors.New("test error")
+type FakeIPTableChain struct {
+	CreateReturns  error
+	DestroyReturns error
+
+	CreatedRules   []iptables.Rule
+	DestroyedRules []iptables.Rule
+}
+
+func (f *FakeIPTableChain) Create(rule iptables.Rule) error {
+	f.CreatedRules = append(f.CreatedRules, rule)
+	return f.CreateReturns
+}
+
+func (f *FakeIPTableChain) Destroy(rule iptables.Rule) error {
+	f.DestroyedRules = append(f.DestroyedRules, rule)
+	return f.DestroyReturns
+}
 
 var _ = Describe("Configure", func() {
+	Describe("ConfigureSubnet", func() {
+		var (
+			bridger          *fakedevices.FakeBridge
+			linkConfigurer   *fakedevices.FakeLink
+			postRoutingChain *FakeIPTableChain
+
+			configurer *network.Configurer
+		)
+
+		BeforeEach(func() {
+			bridger = &fakedevices.FakeBridge{}
+			linkConfigurer = &fakedevices.FakeLink{}
+			postRoutingChain = &FakeIPTableChain{}
+			configurer = &network.Configurer{Link: linkConfigurer, Bridge: bridger, Logger: lagertest.NewTestLogger("test"), PostRoutingChain: postRoutingChain}
+		})
+
+		Describe("Creating a Bridge", func() {
+			It("creates a bridge with the current IP and subnet", func() {
+				ip, subnet, _ := net.ParseCIDR("1.2.3.0/30")
+				Ω(configurer.ConfigureSubnet("the-bridge", nil, ip, subnet)).Should(Succeed())
+
+				Ω(bridger.CreateCalledWith.Name).Should(Equal("the-bridge"))
+				Ω(bridger.CreateCalledWith.IP).Should(Equal(ip))
+				Ω(bridger.CreateCalledWith.Subnet).Should(Equal(subnet))
+			})
+
+			Context("when creating the bridge fails", func() {
+				It("returns a wrapped error", func() {
+					ip, subnet, _ := net.ParseCIDR("1.2.3.0/30")
+					bridger.CreateReturns.Error = errors.New("what happened to this cake?")
+					err := configurer.ConfigureSubnet("the-bridge", nil, ip, subnet)
+					Ω(err).Should(MatchError(&network.BridgeCreationError{bridger.CreateReturns.Error, "the-bridge", ip, subnet}))
+				})
+			})
+		})
+
+		Context("Creating a NAT route to masquerade traffic", func() {
+			It("creates a NAT rule to masquerade traffic for the subnet externally", func() {
+				bridgeIP, subnet, _ := net.ParseCIDR("1.2.3.0/30")
+				externalIP := net.ParseIP("9.8.7.6")
+				Ω(configurer.ConfigureSubnet("the-bridge", externalIP, bridgeIP, subnet)).Should(Succeed())
+
+				Ω(postRoutingChain.CreatedRules).Should(ContainElement(iptables.Rule{
+					Jump:   iptables.SourceNAT,
+					Source: subnet,
+					To:     externalIP,
+				}))
+			})
+
+			Context("when creating the rule fails", func() {
+				It("returns a wrapped error", func() {
+					postRoutingChain.CreateReturns = errors.New("o no")
+
+					bridgeIP, subnet, _ := net.ParseCIDR("1.2.3.0/30")
+					externalIP := net.ParseIP("9.8.7.6")
+					err := configurer.ConfigureSubnet("the-bridge", externalIP, bridgeIP, subnet)
+
+					Ω(err).Should(MatchError(&network.IPTablesError{postRoutingChain.CreateReturns, "create", iptables.Rule{
+						Jump:   iptables.SourceNAT,
+						Source: subnet,
+						To:     externalIP,
+					}}))
+				})
+			})
+		})
+	})
+
 	Describe("ConfigureHost", func() {
 		var (
 			vethCreater    *fakedevices.FakeVethCreater

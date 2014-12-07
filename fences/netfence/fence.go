@@ -16,6 +16,10 @@ import (
 
 type f struct {
 	subnets.Subnets
+	network interface {
+		ConfigureSubnet(bridgeName string, externalIP, bridgeIP net.IP, subnet *net.IPNet) error
+	}
+
 	mtu        uint32
 	externalIP net.IP
 }
@@ -54,7 +58,7 @@ func (f *f) Build(spec string, sysconfig *sysconfig.Config, containerID string) 
 		}
 	}
 
-	subnet, containerIP, err := f.Subnets.Allocate(subnetSelector, ipSelector)
+	subnet, containerIP, _, err := f.Subnets.Allocate(subnetSelector, ipSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +79,8 @@ func (f *f) Build(spec string, sysconfig *sysconfig.Config, containerID string) 
 
 	ones, _ := subnet.Mask.Size()
 	subnetShareable := (ones < 30)
+
+	f.network.ConfigureSubnet(bridgeIfcName, f.externalIP, subnets.GatewayIP(subnet), subnet)
 
 	return &Allocation{subnet, containerIP, containerIfcName, network.DestroyableInterface(hostIfcName), subnetShareable, network.DestroyableBridge(bridgeIfcName), f}, nil
 }

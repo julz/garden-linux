@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/cloudfoundry-incubator/garden-linux/network/fakenetwork"
 	"github.com/cloudfoundry-incubator/garden-linux/network/subnets"
 	"github.com/cloudfoundry-incubator/garden-linux/old/sysconfig"
 	"github.com/cloudfoundry-incubator/garden/api"
@@ -15,10 +16,11 @@ import (
 
 var _ = Describe("Fence", func() {
 	var (
-		fakeSubnetPool *fakeSubnets
-		fence          *f
-		syscfg         sysconfig.Config  = sysconfig.NewConfig("")
-		sysconfig      *sysconfig.Config = &syscfg
+		fakeSubnetPool        *fakeSubnets
+		fakeNetworkConfigurer *fakenetwork.FakeConfigurer
+		fence                 *f
+		syscfg                sysconfig.Config  = sysconfig.NewConfig("")
+		sysconfig             *sysconfig.Config = &syscfg
 	)
 
 	BeforeEach(func() {
@@ -26,13 +28,14 @@ var _ = Describe("Fence", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 
 		fakeSubnetPool = &fakeSubnets{nextSubnet: a}
-		fence = &f{fakeSubnetPool, 1500, net.ParseIP("1.2.3.4")}
+		fakeNetworkConfigurer = &fakenetwork.FakeConfigurer{}
+		fence = &f{fakeSubnetPool, fakeNetworkConfigurer, 1500, net.ParseIP("9.8.7.6")}
 	})
 
 	Describe("Capacity", func() {
 		It("delegates to Subnets", func() {
 			fakeSubnetPool.capacity = 4
-			fence := &f{fakeSubnetPool, 1500, net.ParseIP("1.2.3.4")}
+			fence := &f{fakeSubnetPool, nil, 1500, net.ParseIP("1.2.3.4")}
 
 			Ω(fence.Capacity()).Should(Equal(4))
 		})
@@ -60,6 +63,35 @@ var _ = Describe("Fence", func() {
 
 				Ω(fakeSubnetPool.lastRequested.IP).Should(Equal(subnets.DynamicIPSelector))
 				Ω(allocation).Should(HaveContainerIP("2.2.3.3"))
+			})
+
+			Describe("Creating the bridge/NAT rules", func() {
+				Context("when it is the first IP inside a subnet", func() {
+					It("creates shared subnet resources using a unique name for the bridge", func() {
+						_, err := fence.Build("", sysconfig, "")
+						Ω(err).ShouldNot(HaveOccurred())
+
+						Ω(fakeNetworkConfigurer.ConfiguredSubnets).Should(ContainElement(fakenetwork.ConfiguredSubnet{
+							ExternalIP:   "9.8.7.6",
+							BridgeName:   fmt.Sprintf("w%dbr-01020000", GinkgoParallelNode()), // based on hex of subnet IP
+							BridgeIP:     "1.2.3.254",
+							BridgeSubnet: "1.2.0.0/22",
+						}))
+					})
+
+					Context("when creating shared subnet resources fails", func() {
+						PIt("returns an error", func() {
+						})
+
+						PIt("releases the reservation", func() {
+						})
+					})
+				})
+
+				Context("when it is not the first IP inside a subnet", func() {
+					PIt("creats shared subnet resources using a new name for the bridge", func() {
+					})
+				})
 			})
 
 			It("passes back an error if allocation fails", func() {
@@ -385,7 +417,7 @@ var _ = Describe("Fence", func() {
 				})
 
 				It("configures with the correct external IP", func() {
-					Ω(env).Should(ContainElement("external_ip=1.2.3.4"))
+					Ω(env).Should(ContainElement("external_ip=9.8.7.6"))
 				})
 			})
 		})
@@ -395,6 +427,7 @@ var _ = Describe("Fence", func() {
 type fakeSubnets struct {
 	nextSubnet      *net.IPNet
 	nextIP          net.IP
+	nextIPisFirst   bool
 	allocationError error
 	lastRequested   struct {
 		Subnet subnets.SubnetSelector
@@ -416,15 +449,15 @@ type fakeAllocation struct {
 	containerIP string
 }
 
-func (f *fakeSubnets) Allocate(s subnets.SubnetSelector, i subnets.IPSelector) (*net.IPNet, net.IP, error) {
+func (f *fakeSubnets) Allocate(s subnets.SubnetSelector, i subnets.IPSelector) (*net.IPNet, net.IP, bool, error) {
 	if f.allocationError != nil {
-		return nil, nil, f.allocationError
+		return nil, nil, false, f.allocationError
 	}
 
 	f.lastRequested.Subnet = s
 	f.lastRequested.IP = i
 
-	return f.nextSubnet, f.nextIP, nil
+	return f.nextSubnet, f.nextIP, f.nextIPisFirst, nil
 }
 
 func (f *fakeSubnets) Release(n *net.IPNet, c net.IP) (bool, error) {

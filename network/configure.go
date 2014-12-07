@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 
+	"github.com/cloudfoundry-incubator/garden-linux/network/iptables"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -26,7 +27,51 @@ type Configurer struct {
 		Add(bridge, slave *net.Interface) error
 	}
 
+	PostRoutingChain interface {
+		Create(rule iptables.Rule) error
+		Destroy(rule iptables.Rule) error
+	}
+
 	Logger lager.Logger
+}
+
+func (c *Configurer) ConfigureSubnet(bridgeName string, externalIP, bridgeIP net.IP, subnet *net.IPNet) error {
+	var (
+		err    error
+		bridge *net.Interface
+	)
+
+	cLog := c.Logger.Session("configure-subnet", lager.Data{
+		"name":       bridgeName,
+		"bridgeIP":   bridgeIP,
+		"externalIP": externalIP,
+	})
+
+	cLog.Debug("create-bridge")
+	if bridge, err = c.Bridge.Create(bridgeName, bridgeIP, subnet); err != nil {
+		cLog.Error("create-bridge", err)
+		return &BridgeCreationError{err, bridgeName, bridgeIP, subnet}
+	}
+
+	cLog.Debug("bring-bridge-up")
+	if err = c.Link.SetUp(bridge); err != nil {
+		cLog.Error("bring-bridge-up", err)
+		return &LinkUpError{err, bridge, "bridge"}
+	}
+
+	rule := iptables.Rule{
+		Source: subnet,
+		Jump:   iptables.SourceNAT,
+		To:     externalIP,
+	}
+
+	cLog.Debug("add-subnet-rule", lager.Data{"rule": rule, "chain": c.PostRoutingChain})
+	if err = c.PostRoutingChain.Create(rule); err != nil {
+		cLog.Error("add-subnet-rule", err)
+		return &IPTablesError{err, "create", rule}
+	}
+
+	return nil
 }
 
 func (c *Configurer) ConfigureHost(hostIfcName, containerIfcName, bridgeName string, containerPid int, bridgeIP net.IP, subnet *net.IPNet, mtu int) error {
